@@ -297,3 +297,143 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+// ====== Energy Particle Effect ======
+function initEnergyEffect() {
+  const canvas  = document.getElementById('energyCanvas');
+  const arrow   = document.getElementById('energyArrow');
+  if (!canvas || !arrow) return;
+
+  const ctx  = canvas.getContext('2d');
+  const SIZE = 220;
+  canvas.width  = SIZE;
+  canvas.height = SIZE;
+
+  const CX = SIZE / 2;
+  const CY = SIZE / 2;
+  const RADIUS = 60;
+
+  let phase      = 'idle';
+  let glowAlpha  = 0;
+  let particles  = [];
+  let cycleTimeout;
+
+  function drawY(alpha) {
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = 'bold 54px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#38bdf8';
+    ctx.shadowColor = '#0ea5e9';
+    ctx.shadowBlur = 22 * alpha;
+    ctx.fillText('Y', CX, CY);
+    ctx.restore();
+  }
+
+  function spawnParticle() {
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = RADIUS + 45 + Math.random() * 65;
+    return {
+      x: CX + Math.cos(angle) * dist,
+      y: CY + Math.sin(angle) * dist,
+      tx: CX + (Math.random() - 0.5) * 16,
+      ty: CY + (Math.random() - 0.5) * 16,
+      size: 1.8 + Math.random() * 2.2,
+      alpha: 0,
+      speed: 0.028 + Math.random() * 0.038,
+      progress: 0,
+      trail: [],
+    };
+  }
+
+  function startCycle() {
+    phase = 'spawning';
+    glowAlpha = 0;
+    particles = Array.from({ length: 30 }, spawnParticle);
+
+    setTimeout(function() {
+      phase = 'charging';
+      arrow.classList.remove('pulsing');
+      void arrow.offsetWidth;
+      arrow.classList.add('charged');
+      glowAlpha = 1;
+      setTimeout(function() { arrow.classList.add('pulsing'); }, 600);
+
+      setTimeout(function() {
+        phase = 'idle';
+        glowAlpha = 0;
+        arrow.classList.remove('charged', 'pulsing');
+        arrow.style.opacity = '0';
+        particles = [];
+        cycleTimeout = setTimeout(startCycle, 3200);
+      }, 3200);
+    }, 2500);
+  }
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function draw() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+
+    if (phase === 'idle') { requestAnimationFrame(draw); return; }
+
+    if (glowAlpha > 0) {
+      var gr = ctx.createRadialGradient(CX, CY, RADIUS - 4, CX, CY, RADIUS + 22);
+      gr.addColorStop(0,   'rgba(56,189,248,' + (0.55 * glowAlpha) + ')');
+      gr.addColorStop(0.5, 'rgba(14,165,233,' + (0.25 * glowAlpha) + ')');
+      gr.addColorStop(1,   'rgba(14,165,233,0)');
+      ctx.beginPath();
+      ctx.arc(CX, CY, RADIUS + 14, 0, Math.PI * 2);
+      ctx.fillStyle = gr;
+      ctx.fill();
+    }
+
+    drawY(phase === 'charging' ? Math.min(1, glowAlpha) : 0);
+
+    particles.forEach(function(p) {
+      p.progress = Math.min(1, p.progress + p.speed);
+      p.alpha = p.progress < 0.2 ? p.progress / 0.2
+              : p.progress > 0.85 ? (1 - p.progress) / 0.15
+              : 1;
+
+      var eased = 1 - Math.pow(1 - p.progress, 3);
+      var cx = lerp(p.x, p.tx, eased);
+      var cy = lerp(p.y, p.ty, eased);
+
+      p.trail.push({ x: cx, y: cy });
+      if (p.trail.length > 9) p.trail.shift();
+
+      for (var i = 1; i < p.trail.length; i++) {
+        var ta = (i / p.trail.length) * p.alpha * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(p.trail[i-1].x, p.trail[i-1].y);
+        ctx.lineTo(p.trail[i].x, p.trail[i].y);
+        ctx.strokeStyle = 'rgba(56,189,248,' + ta + ')';
+        ctx.lineWidth = p.size * 0.45;
+        ctx.stroke();
+      }
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(56,189,248,' + p.alpha + ')';
+      ctx.shadowColor = '#0ea5e9';
+      ctx.shadowBlur = 9;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+
+    if (phase === 'charging') {
+      glowAlpha = Math.min(1, glowAlpha + 0.035);
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  requestAnimationFrame(draw);
+  cycleTimeout = setTimeout(startCycle, 1800);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  initEnergyEffect();
+});
